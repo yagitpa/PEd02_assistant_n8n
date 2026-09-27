@@ -129,6 +129,43 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [460, 420]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Строка лога успешного запроса. Колонки совпадают с логом ошибок из Error Handler,\n// поэтому обе ветки пишут в один лист и по нему считается error rate.\n// duration_sec — время от отправки сообщения пользователем до ответа бота (точность — секунды,\n// т. к. Telegram отдаёт message.date в секундах).\nconst message = $('Telegram Trigger').first().json.message;\nconst answer = String($('AI Agent').first().json.output ?? '');\n\nreturn [{\n  json: {\n    timestamp: $now.toFormat('yyyy-MM-dd HH:mm:ss'),\n    status: 'success',\n    workflow_id: $workflow.id,\n    workflow_name: $workflow.name,\n    node_name: '',\n    execution_id: $execution.id,\n    execution_url: '',\n    mode: $execution.mode,\n    error_type: '',\n    error_message: '',\n    error_stack: '',\n    duration_sec: Math.max(0, Math.round(Date.now() / 1000 - message.date)),\n    response_chars: answer.length,\n  },\n}];"
+      },
+      "id": "a1f0c7d2-1b3e-4c5a-9d10-000000000009",
+      "name": "Собрать лог запроса",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1260, 200]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "",
+          "mode": "list"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "a1f0c7d2-1b3e-4c5a-9d10-000000000010",
+      "name": "Лог в Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1480, 200]
     }
   ],
   "connections": {
@@ -146,6 +183,12 @@
     },
     "AI Agent": {
       "main": [[{ "node": "Ответ в Telegram", "type": "main", "index": 0 }]]
+    },
+    "Ответ в Telegram": {
+      "main": [[{ "node": "Собрать лог запроса", "type": "main", "index": 0 }]]
+    },
+    "Собрать лог запроса": {
+      "main": [[{ "node": "Лог в Google Sheets", "type": "main", "index": 0 }]]
     },
     "Anthropic Chat Model": {
       "ai_languageModel": [[{ "node": "AI Agent", "type": "ai_languageModel", "index": 0 }]]
