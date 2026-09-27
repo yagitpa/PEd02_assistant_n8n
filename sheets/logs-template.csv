@@ -1,0 +1,1 @@
+timestamp,status,workflow_id,workflow_name,node_name,execution_id,execution_url,mode,error_type,error_message,error_stack,duration_sec,response_chars

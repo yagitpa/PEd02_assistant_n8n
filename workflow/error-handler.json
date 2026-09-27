@@ -1,0 +1,85 @@
+{
+  "name": "Error Handler — логи в Sheets + Gmail",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "e2b0c7d2-1b3e-4c5a-9d10-000000000001",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Приводим данные Error Trigger к одной строке лога.\n// Ошибка в обычной ноде приходит в $json.execution, ошибка в триггере — в $json.trigger.\nconst CATEGORIES = [\n  ['timeout', /timeout|timed out|etimedout|econnaborted/],\n  ['invalid_token', /\\b401\\b|\\b403\\b|unauthori[sz]ed|forbidden|invalid.*(api key|token|credential)|authentication/],\n  ['rate_limit', /\\b429\\b|rate.?limit|too many requests|overloaded|quota/],\n  ['invalid_json', /json/],\n  ['empty_response', /empty|no output|no response|undefined/],\n  ['telegram', /telegram|chat not found|bot was blocked|message is too long|parse entities/],\n];\n\nreturn $input.all().map(({ json }) => {\n  const execution = json.execution ?? {};\n  const error = execution.error ?? json.trigger?.error ?? {};\n  const message = String(error.message ?? 'Unknown error');\n  const text = `${message} ${error.description ?? ''}`.toLowerCase();\n  const errorType = CATEGORIES.find(([, re]) => re.test(text))?.[0] ?? 'other';\n\n  return {\n    json: {\n      timestamp: $now.toFormat('yyyy-MM-dd HH:mm:ss'),\n      status: 'error',\n      workflow_id: json.workflow?.id ?? '',\n      workflow_name: json.workflow?.name ?? '',\n      node_name: execution.lastNodeExecuted ?? error.node?.name ?? 'trigger',\n      execution_id: execution.id ?? '',\n      execution_url: execution.url ?? '',\n      mode: execution.mode ?? json.trigger?.mode ?? '',\n      error_type: errorType,\n      error_message: message.slice(0, 500),\n      error_stack: String(error.stack ?? '').slice(0, 2000),\n    },\n  };\n});"
+      },
+      "id": "e2b0c7d2-1b3e-4c5a-9d10-000000000002",
+      "name": "Собрать лог",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "",
+          "mode": "list"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "e2b0c7d2-1b3e-4c5a-9d10-000000000003",
+      "name": "Запись в Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [500, 200],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "sendTo": "your-email@gmail.com",
+        "subject": "=🚨 [n8n] {{ $json.workflow_name }}: {{ $json.error_type }} в ноде «{{ $json.node_name }}»",
+        "emailType": "text",
+        "message": "=В workflow произошла ошибка.\n\nВремя: {{ $json.timestamp }}\nWorkflow: {{ $json.workflow_name }} ({{ $json.workflow_id }})\nНода: {{ $json.node_name }}\nТип ошибки: {{ $json.error_type }}\nРежим запуска: {{ $json.mode }}\n\nСообщение:\n{{ $json.error_message }}\n\nОткрыть выполнение в n8n:\n{{ $json.execution_url || 'ссылка недоступна (ошибка в триггере)' }}\n\nЛог уже записан в Google Sheets.",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "e2b0c7d2-1b3e-4c5a-9d10-000000000004",
+      "name": "Письмо в Gmail",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [500, 400],
+      "webhookId": "c1d2e3f4-5a6b-4c7d-8e9f-0a1b2c3d4e5f"
+    }
+  ],
+  "connections": {
+    "Error Trigger": {
+      "main": [[{ "node": "Собрать лог", "type": "main", "index": 0 }]]
+    },
+    "Собрать лог": {
+      "main": [
+        [
+          { "node": "Запись в Google Sheets", "type": "main", "index": 0 },
+          { "node": "Письмо в Gmail", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}
